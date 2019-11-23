@@ -17,7 +17,7 @@ cursor!(o::Window, r::Integer, c::Integer) = set_cursor(o, (r, c - 1))
 # array interface for buffer
 
 # index relative end ( -1 is last element)
-immutable EndRelIndex
+struct EndRelIndex
     i::Int
 end
 
@@ -25,7 +25,7 @@ vimindex(a::Integer) = a > 0 ? a - 1 : throw(BoundsError())
 vimindex(a::EndRelIndex) = a.i < 0 ? a.i : throw(BoundsError())
 
 # range where indices already are converted to api indicies
-immutable CappedRange
+struct CappedRange
     start::Int
     stop::Int
     CappedRange(a,b) = new(vimindex(a),vimindex(b))

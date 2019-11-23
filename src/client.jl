@@ -2,18 +2,16 @@ const REQUEST = 0
 const RESPONSE = 1
 const NOTIFICATION = 2
 
-type NvimClient{S} <: NvimObject
+mutable struct NvimClient{S} # <: NvimObject
     input::S #input to nvim
     output::S
-
     channel_id::Int
     next_reqid::Int
-    waiting::Dict{Int,RemoteRef}
+    waiting::Dict{Int,Channel}
     reader::Task
-    NvimClient(a,b,c,d,e) = new(a,b,c,d,e)
 end
 
-function NvimClient{S}(input::S, output::S, handler=DummyHandler())
+function NvimClient(input::S, output::S, handler=DummyHandler()) where {S}
     c = NvimClient{S}(input, output, -1, 0, Dict{Int,RemoteRef}())
     c.reader = @async readloop(c,handler)
     c.channel_id, metadata = send_request(c, "vim_get_api_info", [])
@@ -53,15 +51,15 @@ function readloop(c::NvimClient, handler)
                 logerr(err, catch_backtrace(), "handler", "request", method, args)
             end
         end
-        flush(STDERR)
+        flush(stderr)
     end
 end
 
 function logerr(e::Exception, bt, where, what, name, args)
-    println(STDERR, "Caught Exception in $where for $what \"$name\" with arguments $args:")
-    showerror(STDERR, e, bt)
-    println(STDERR, "")
-    flush(STDERR)
+    println(stderr, "Caught Exception in $where for $what \"$name\" with arguments $args:")
+    showerror(stderr, e, bt)
+    println(stderr, "")
+    flush(stderr)
 end
 
 Base.wait(c::NvimClient) = wait(c.reader)
@@ -73,7 +71,7 @@ function send_request(c::NvimClient, meth, args)
     reqid = c.next_reqid
     c.next_reqid += 1
     # TODO: are these things cheap to alloc or should they be reused
-    res = RemoteRef()
+    res = Channel()
     c.waiting[reqid] = res
     meth = string(meth)
 
@@ -84,6 +82,14 @@ function send_request(c::NvimClient, meth, args)
         error(string(meth, ": ", bytestring(err[2])))
     end
     res
+end
+
+function send_request(s :: TCPSocket, reqid, method, args)
+    val = pack(Any[0, reqid, method, args])
+    write(s, val)
+    read(s)
+    res = read(s.buffer)
+    return res
 end
 
 function reply_error(c, serial, err)
@@ -97,7 +103,7 @@ end
 # when overriding these, note that this runs in the reader task,
 # use @async/@spawn when doing anything long-running or blocking,
 # including method calls to nvim
-immutable DummyHandler; end
+struct DummyHandler end
 function on_notify(::DummyHandler, c, name, args)
     println("notification: $name $args")
 end

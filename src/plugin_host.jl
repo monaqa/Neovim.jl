@@ -1,6 +1,6 @@
 start_host() = try wait(nvim_child(HostHandler())) end
 
-immutable HostHandler
+struct HostHandler
     specs::Dict{ByteString, Any} # plugin file paths
     proc_callbacks::Dict{ByteString, Function}
     HostHandler() = new(Dict{ByteString, Any}(), Dict{ByteString, Function}())
@@ -12,7 +12,7 @@ function on_notify(h::HostHandler, c, name::AbstractString, args::Vector{Any})
     proc = require_callback(h, name)
 
     if proc == nothing
-        println(STDERR, "Callback for notification $name not defined.\n")
+        println(stderr, "Callback for notification $name not defined.\n")
     end
 
     @async try
@@ -25,14 +25,14 @@ end
 function on_request(h::HostHandler, c, serial, method, args)
     if method == "specs" # called on UpdateRemotePlugins
         reply_result(c, serial, require_plugin(h, args...))
-        println(STDERR, h)
+        println(stderr, h)
     else
         proc = require_callback(h, method)
 
-        if proc == nothing
+        if proc === nothing
             emsg = "Callback for request $method not defined."
             reply_error(c, serial, emsg)
-            println(STDERR, "$emsg\n")
+            println(stderr, "$emsg\n")
         end
 
         @async try
@@ -61,9 +61,9 @@ function require_plugin(h::HostHandler, filename)
     try
         require(filename)
     catch err
-        println(STDERR, "Error while loading plugin $filename:")
-        showerror(STDERR, err, catch_backtrace())
-        flush(STDERR)
+        println(stderr, "Error while loading plugin $filename:")
+        showerror(stderr, err, catch_backtrace())
+        flush(stderr)
     end
     delete!(tls, :nvim_plugin_host)
     delete!(tls, :nvim_plugin_filename)
